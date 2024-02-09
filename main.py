@@ -1,16 +1,13 @@
-from fastapi import UploadFile, File, Form, HTTPException,FastAPI, Cookie, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Cookie, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pymongo import MongoClient
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
-import uvicorn
-import base64
-import cv2
-import os
-import asyncio
-import websockets
+import uvicorn, base64, cv2, os, asyncio, websockets
+from typing import Optional
+
 
 app = FastAPI()
 app.add_middleware(
@@ -68,29 +65,50 @@ async def websocket_endpoint(websocket: WebSocket, response:Response):
     # response.set_cookie(key="user_id",value=client_id)
     # return
 
-@app.get("/set-cookie")
-async def set_cookie(response: Response):
-    response.set_cookie(key="my_cookie", value="123")
-    return {"message": "Cookie set successfully"}
-
-@app.get("/get-cookie")
-async def get_cookie(user_id: str = Cookie(None)):
-    return {"my_cookie": user_id}
-
 @app.get("/")
-async def test():
+async def test(video_name: Optional[str] = None):
+    if video_name is None:
+        return "Please provide a video name in the request parameters."
+
     global socket
 
-    vid = cv2.VideoCapture("/videos/vidSam.mp4") 
-    i=0
-    while i<100: 
+    video_path = f"videos/{video_name}"
+    print(video_path)
+    vid = cv2.VideoCapture(video_path)
+    if not vid.isOpened():
+        return f"Error: Unable to open video file '{video_path}'"
+
+    i = 0
+    while True: 
         ret, frame = vid.read()
+        if not ret:
+            break  # Break out of the loop if there are no more frames
         _, buffer = cv2.imencode('.jpg', frame)
         img_str = base64.b64encode(buffer).decode('utf-8')
         await socket.send_text(img_str)
-        i+=1
+        i += 1
         
     return "sent"
+
+
+@app.get("/videos")
+async def get_videos_with_first_frames():
+    videos_folder = "videos"
+    video_files = [file for file in os.listdir(videos_folder) if file.endswith(".mp4")]
+
+    videos_data = []
+    for video_file in video_files:
+        video_path = os.path.join(videos_folder, video_file)
+        vid = cv2.VideoCapture(video_path)
+        if vid.isOpened():
+            ret, frame = vid.read()
+            if ret:
+                _, buffer = cv2.imencode('.jpg', frame)
+                img_str = base64.b64encode(buffer).decode('utf-8')
+                videos_data.append({"name": video_file, "first_frame": img_str})
+        vid.release()
+
+    return videos_data
 
 @app.post('/uploadVideo')
 async def upload_video(file: UploadFile = File(...)):
@@ -186,6 +204,15 @@ async def send_video_frames(websocket: websockets.WebSocketServerProtocol, video
         await websocket.send_bytes(buffer.tobytes())
 
     cap.release()
+
+@app.get("/set-cookie")
+async def set_cookie(response: Response):
+    response.set_cookie(key="my_cookie", value="123")
+    return {"message": "Cookie set successfully"}
+
+@app.get("/get-cookie")
+async def get_cookie(user_id: str = Cookie(None)):
+    return {"my_cookie": user_id}
 
 
 if __name__ == "__main__":

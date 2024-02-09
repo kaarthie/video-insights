@@ -1,4 +1,4 @@
-from fastapi import UploadFile, File, Form, HTTPException,FastAPI
+from fastapi import UploadFile, File, Form, HTTPException,FastAPI, Cookie, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pymongo import MongoClient
@@ -9,6 +9,8 @@ import uvicorn
 import base64
 import cv2
 import os
+import asyncio
+import websockets
 
 app = FastAPI()
 app.add_middleware(
@@ -24,6 +26,9 @@ mongo_uri = "mongodb+srv://karthi:karthi2001@first.ixg5wi3.mongodb.net/videoInsi
 client = MongoClient(mongo_uri)
 users_collection = client.get_database().get_collection("users")
 
+socket=""
+print(socket)
+
 class PhotoUploadResponse(BaseModel):
     name: str
     file: str
@@ -35,13 +40,57 @@ photos_folder = Path("photos")
 # Mount the "photos" folder to serve static files
 app.mount("/photos", StaticFiles(directory="photos"), name="photos")
 
-@app.get("/")
-def test():
-    return "working"
+
 
 class uploadRequest(BaseModel):
     name: str
     file: UploadFile
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, response:Response):
+    global socket
+    await websocket.accept()
+    socket= websocket
+    # client_id=uuid.uuid4()
+    # print("hello")
+    # await manager.connect(websocket,client_id)
+    try:
+        # while True:
+        data = await websocket.receive_text()
+        print(data)
+            # await manager.(f"You wrote: {data}", client_id)
+            # await manager.broadcast(f"Client #{client_id} says: {data}")
+        await websocket.send_text("hello")
+    except WebSocketDisconnect:
+        # manager.disconnect(client_id)
+        # await manager.broadcast(f"Client #{client_id} left the chat")
+        print("error")
+    # response.set_cookie(key="user_id",value=client_id)
+    # return
+
+@app.get("/set-cookie")
+async def set_cookie(response: Response):
+    response.set_cookie(key="my_cookie", value="123")
+    return {"message": "Cookie set successfully"}
+
+@app.get("/get-cookie")
+async def get_cookie(user_id: str = Cookie(None)):
+    return {"my_cookie": user_id}
+
+@app.get("/")
+async def test():
+    global socket
+
+    vid = cv2.VideoCapture("/videos/vidSam.mp4") 
+    i=0
+    while i<100: 
+        ret, frame = vid.read()
+        _, buffer = cv2.imencode('.jpg', frame)
+        img_str = base64.b64encode(buffer).decode('utf-8')
+        await socket.send_text(img_str)
+        i+=1
+        
+    return "sent"
 
 @app.post('/uploadVideo')
 async def upload_video(file: UploadFile = File(...)):
@@ -79,7 +128,9 @@ async def upload_video(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to process video. {str(e)}"}, status_code=500)
 
-
+@app.get("/test")
+def test():
+    return "hello"
 
 @app.get("/getUsers")
 async def get_users():
@@ -117,6 +168,25 @@ async def upload_photo(name: str = Form(...), file: UploadFile = File(...)):
     
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to upload photo. {str(e)}"}, status_code=500)
-    
+
+async def send_video_frames(websocket: websockets.WebSocketServerProtocol, video_path: str):
+    cap = cv2.VideoCapture(video_path)
+
+    while cap.isOpened():
+        success, frame = cap.read()
+        if not success:
+            break
+
+        # Convert the frame to JPEG format
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            continue
+
+        # Convert the buffer to bytes and send it as a Blob object
+        await websocket.send_bytes(buffer.tobytes())
+
+    cap.release()
+
+
 if __name__ == "__main__":
-    uvicorn.run(app,host="0.0.0.0",port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

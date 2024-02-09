@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 async def send_video_frames(websocket, path):
-    video_path = './videos/vidSam.mp4'
+    video_path = './videos/vid.mp4'
     cap = cv2.VideoCapture(video_path)
 
     start_message = await websocket.recv()

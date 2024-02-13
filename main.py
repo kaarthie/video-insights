@@ -133,6 +133,9 @@ async def stream_webcam():
             response_object["frameNumber"] = i
 
         await socket.send_json(response_object)
+        if i == 200:
+            cap.release()
+            break
         i += 1
 
     cap.release()  # Release the webcam capture after streaming frames

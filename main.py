@@ -184,12 +184,11 @@ async def upload_video(file: UploadFile = File(...)):
             video_file.write(await file.read())
 
         # Display the video using cv2.imshow()
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(video_path)
         while True:
             success, img = cap.read()
             if not success:
                 break
-            cv2.imshow("Video", img)
             if cv2.waitKey(15) & 0xFF == ord('q'):
                 break
 

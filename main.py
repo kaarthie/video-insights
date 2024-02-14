@@ -94,9 +94,15 @@ async def test(video_name: Optional[str] = None):
     prev =0 
 
     i = 0
+    
     while True: 
-        time_frame = i/fps
+        # full_frame = fps
+        half_frame= fps//2
+        time_frame=i/fps
         ret, frame = vid.read()
+        if(i%half_frame!=0):
+            i+=1
+            continue
         if not ret:
             break  # Break out of the loop if there are no more frames
         obj = detect_persons_with_faces(frame, model, known_faces)
@@ -112,8 +118,9 @@ async def test(video_name: Optional[str] = None):
         response_object = {"status": "success", "image": img_str}
         
         # Add frame details for every 20th frame
-        if i % 20 == 0:
-            response_object["frameNumber"] = i
+        if text_str != "":
+            response_object["frameNumber"]=text_str
+        # if(text_str!=""):
         
         await socket.send_json(response_object)
         i += 1 
@@ -282,7 +289,7 @@ async def gemini_response(prompt: str = Body(..., description="The context or ba
                           max_tokens: Optional[int] = None):
     model = genai.GenerativeModel("gemini-pro")
     try:
-        response = model.generate_content([prompt, question])
+        response = model.generate_content(["You are a conversation chatbot, answer the questions based on the below information: {}".format(log), question])
         print(response.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"API error: {e}")

@@ -1,3 +1,4 @@
+from ultralytics import YOLO
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Cookie, Request, Response, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +9,7 @@ from pathlib import Path
 import uvicorn, base64, cv2, os, asyncio, websockets
 from typing import Optional
 from dotenv import load_dotenv
+from yoloTest import detect_persons_with_faces, load_known_faces
 load_dotenv()
 import google.generativeai as genai
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -22,7 +24,7 @@ app.add_middleware(
 )
 # DB Connection
 
-mongo_uri = "mongodb+srv://karthi:karthi2001@first.ixg5wi3.mongodb.net/videoInsights"
+mongo_uri = os.getenv("DB_URI")
 client = MongoClient(mongo_uri)
 users_collection = client.get_database().get_collection("users")
 
@@ -69,28 +71,32 @@ async def websocket_endpoint(websocket: WebSocket, response:Response):
     # return
 
 
-
+known_faces_directory = "photos"
+known_faces = load_known_faces(known_faces_directory)
 
 @app.get("/")
 async def test(video_name: Optional[str] = None):
-    cap = cv2.VideoCapture(0)
-    if cap.isOpened():
-        cap.release()
     global socket
-
 
     video_path = f"videos/{video_name}"
     print(video_path)
     vid = cv2.VideoCapture(video_path)
     if not vid.isOpened():
         return {"error": f"Unable to open video file '{video_path}'"}
+    #  cap = cv2.VideoCapture(0)
+    # cap.set(3, 640)
+    # cap.set(4, 480)
+
+    model = YOLO("yolov8n.pt")
+    prev =0 
 
     i = 0
     while True: 
         ret, frame = vid.read()
         if not ret:
             break  # Break out of the loop if there are no more frames
-        
+        frame = detect_persons_with_faces(frame, model, known_faces)
+
         _, buffer = cv2.imencode('.jpg', frame)
         img_str = base64.b64encode(buffer).decode('utf-8')
         
@@ -108,10 +114,7 @@ async def test(video_name: Optional[str] = None):
 
 @app.get("/webcam")
 async def stream_webcam():
-    for i in range(3):  # Assuming up to 10 cameras
-       cap = cv2.VideoCapture(i)
-       if cap.isOpened():
-           cap.release()
+    global socket
     cap = cv2.VideoCapture(0)  # Open webcam (assuming it's the default device)
 
     if not cap.isOpened():
@@ -131,11 +134,10 @@ async def stream_webcam():
         # Add frame details for every 20th frame
         if i % 20 == 0:
             response_object["frameNumber"] = i
-
+        
+        # msg = socket.receive_text()
+        # print(msg)
         await socket.send_json(response_object)
-        if i == 200:
-            cap.release()
-            break
         i += 1
 
     cap.release()  # Release the webcam capture after streaming frames
@@ -187,16 +189,8 @@ async def upload_video(file: UploadFile = File(...)):
             video_file.write(await file.read())
 
         # Display the video using cv2.imshow()
-        cap = cv2.VideoCapture(video_path)
-        while True:
-            success, img = cap.read()
-            if not success:
-                break
-            if cv2.waitKey(15) & 0xFF == ord('q'):
-                break
 
         # Close the video capture
-        cap.release()
         cv2.destroyAllWindows()
 
         return JSONResponse(content={"message": "Video processed successfully", "file_name": filename})

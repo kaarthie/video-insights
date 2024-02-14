@@ -56,7 +56,7 @@ def load_known_faces(directory):
 
 def detect_persons_with_faces(img, model, known_faces, confidence_threshold=0.8):
     results = model(img, stream=True)
-
+    text_str=""
     for r in results:
         boxes = r.boxes
 
@@ -78,15 +78,16 @@ def detect_persons_with_faces(img, model, known_faces, confidence_threshold=0.8)
                     top, right, bottom, left = face_location
                     cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
                     cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    print("Frame:",(left,top),(right,bottom))
-                    try:
-                        (b,g,r)=frame[(right+left)//2,bottom+50]
-                        color_name = find_closest_color_name((b,g,r))
-                        cv2.rectangle(frame, ((right+left)//2, bottom+50), ((right+left)//2, bottom+50), (128, 128, 128), 2)
-                        print(color_name)
-                    except:
-                        print("color not found")
-    return img
+                    if(name!="Unknown"):
+                        # print("Frame:",(left,top),(right,bottom))
+                        try:
+                            (b,g,r)=frame[(right+left)//2,bottom+50]
+                            color_name = find_closest_color_name((b,g,r))
+                            cv2.rectangle(frame, ((right+left)//2, bottom+50), ((right+left)//2, bottom+50), (128, 128, 128), 2)
+                            text_str+="{} is wearing {} color dress.".format(name,color_name)  
+                        except:
+                            text_str+="{} is found.".format(name)
+    return {"img":img,"text_str" : text_str}
 
 def main():
     cap = cv2.VideoCapture(0)

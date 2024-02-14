@@ -73,7 +73,7 @@ async def websocket_endpoint(websocket: WebSocket, response:Response):
 
 known_faces_directory = "photos"
 known_faces = load_known_faces(known_faces_directory)
-
+log = {}
 @app.get("/")
 async def test(video_name: Optional[str] = None):
     global socket
@@ -81,6 +81,9 @@ async def test(video_name: Optional[str] = None):
     video_path = f"videos/{video_name}"
     print(video_path)
     vid = cv2.VideoCapture(video_path)
+    vid.set(3,640)
+    vid.set(4,480)
+    fps = vid.get(cv2.CAP_PROP_FPS)
     if not vid.isOpened():
         return {"error": f"Unable to open video file '{video_path}'"}
     #  cap = cv2.VideoCapture(0)
@@ -92,11 +95,16 @@ async def test(video_name: Optional[str] = None):
 
     i = 0
     while True: 
+        time_frame = i/fps
         ret, frame = vid.read()
         if not ret:
             break  # Break out of the loop if there are no more frames
-        frame = detect_persons_with_faces(frame, model, known_faces)
-
+        obj = detect_persons_with_faces(frame, model, known_faces)
+        frame=obj["img"]
+        text_str=obj["text_str"]    
+        if(text_str != ""):
+            log[time_frame] = text_str
+            print(log)    
         _, buffer = cv2.imencode('.jpg', frame)
         img_str = base64.b64encode(buffer).decode('utf-8')
         
@@ -108,9 +116,11 @@ async def test(video_name: Optional[str] = None):
             response_object["frameNumber"] = i
         
         await socket.send_json(response_object)
-        i += 1
-        
+        i += 1 
     return {"status": "success", "message": "All frames sent."}
+
+global is_streaming
+is_streaming = True
 
 @app.get("/webcam")
 async def stream_webcam():

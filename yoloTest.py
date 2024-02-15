@@ -81,9 +81,9 @@ def detect_persons_with_faces(img, model, known_faces, confidence_threshold=0.8)
                     if(name!="Unknown"):
                         # print("Frame:",(left,top),(right,bottom))
                         try:
-                            (b,g,r)=frame[(right+left)//2,bottom+50]
+                            (b,g,r)=frame[(right+left)//2,bottom+150]
                             color_name = find_closest_color_name((b,g,r))
-                            cv2.rectangle(frame, ((right+left)//2, bottom+50), ((right+left)//2, bottom+50), (128, 128, 128), 2)
+                            cv2.rectangle(frame, ((right+left)//2, bottom+150), ((right+left)//2, bottom+150), (255,135,123), 2)
                             text_str+="{} is wearing {} color dress.".format(name,color_name)  
                         except:
                             text_str+="{} is found.".format(name)

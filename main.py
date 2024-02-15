@@ -31,7 +31,9 @@ client = MongoClient(mongo_uri)
 users_collection = client.get_database().get_collection("users")
 
 socket=""
-print(socket)
+
+log = {}
+# print(socket)
 
 # Paths to the "photos"
 photos_folder = Path("photos")
@@ -45,11 +47,12 @@ known_faces = load_known_faces(known_faces_directory)
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     global socket
+    global log
     await websocket.accept()
     socket = websocket
     model = YOLO("yolov8n.pt")
     vid = ""
-    pre=time.time()
+    # pre=time.time()
     while True:
         message = await websocket.receive_text()
         print("message:",message)
@@ -64,19 +67,23 @@ async def websocket_endpoint(websocket: WebSocket):
             obj = detect_persons_with_faces(frame, model, known_faces)
             frame = obj["img"]
             text_str = obj["text_str"]
+            now = datetime.now()
             if(text_str != ""):
-                now = datetime.now()
-                log[now.time()] = text_str
+                log["{}:{}:{}".format(now.hour,now.minute,now.second)] = text_str
                 print(log)      
             _, buffer = cv2.imencode('.jpg', frame)
             img_str = base64.b64encode(buffer).decode('utf-8')
             response_object = {"status": "success", "image": img_str}
              # Add frame details for every 20th frame
             if text_str != "":
-                response_object["frameNumber"] = text_str
+                # response_object["frameNumber"] = "{} : {}".format(now,text_str)
+                response_object["frameNumber"] = "{}:{}:{} : {}".format(now.hour,now.minute,now.second,text_str)
+
+                # response_object["time"] = "{}".format(now)
 
             await socket.send_json(response_object)
         elif(message == "stop"):
+            log={}
             if(vid!=""):
                 vid.release()
                 vid = "" 
@@ -85,11 +92,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 
-log = {}
 @app.get("/")
 async def test(video_name: Optional[str] = None):
     global socket
-
+    log={}
     video_path = f"videos/{video_name}"
     print(video_path)
     vid = cv2.VideoCapture(video_path)
@@ -128,10 +134,10 @@ async def test(video_name: Optional[str] = None):
         
         # Construct response object
         response_object = {"status": "success", "image": img_str}
-        
         # Add frame details for every 20th frame
         if text_str != "":
-            response_object["frameNumber"]=text_str
+            response_object["frameNumber"]="{} second : {}".format(time_frame,text_str)
+            # response_object["time"] = "{}".format()
         # if(text_str!=""):
         
         await socket.send_json(response_object)
@@ -187,6 +193,7 @@ async def get_videos_with_first_frames():
     video_files = [file for file in os.listdir(videos_folder) if file.endswith(".mp4")]
 
     videos_data = []
+    log={}
     for video_file in video_files:
         video_path = os.path.join(videos_folder, video_file)
         vid = cv2.VideoCapture(video_path)
@@ -227,9 +234,7 @@ async def upload_video(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(content={"error": f"Failed to process video. {str(e)}"}, status_code=500)
 
-@app.get("/test")
-def test():
-    return "hello"
+
 
 @app.get("/getUsers")
 async def get_users():
@@ -287,14 +292,6 @@ async def send_video_frames(websocket: websockets.WebSocketServerProtocol, video
 
     cap.release()
 
-@app.get("/set-cookie")
-async def set_cookie(response: Response):
-    response.set_cookie(key="my_cookie", value="123")
-    return {"message": "Cookie set successfully"}
-
-@app.get("/get-cookie")
-async def get_cookie(user_id: str = Cookie(None)):
-    return {"my_cookie": user_id}
 
 @app.post("/askGemini")
 async def gemini_response(prompt: str = Body(..., description="The context or background information for the question."),

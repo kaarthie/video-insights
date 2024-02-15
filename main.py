@@ -33,22 +33,11 @@ users_collection = client.get_database().get_collection("users")
 socket=""
 print(socket)
 
-class PhotoUploadResponse(BaseModel):
-    name: str
-    file: str
-
-
 # Paths to the "photos"
 photos_folder = Path("photos")
 
 # Mount the "photos" folder to serve static files
 app.mount("/photos", StaticFiles(directory="photos"), name="photos")
-
-
-
-class uploadRequest(BaseModel):
-    name: str
-    file: UploadFile
 
 known_faces_directory = "photos"
 known_faces = load_known_faces(known_faces_directory)
@@ -57,7 +46,7 @@ known_faces = load_known_faces(known_faces_directory)
 async def websocket_endpoint(websocket: WebSocket):
     global socket
     await websocket.accept()
-    socket= websocket
+    socket = websocket
     model = YOLO("yolov8n.pt")
     vid = ""
     pre=time.time()
@@ -69,12 +58,12 @@ async def websocket_endpoint(websocket: WebSocket):
         #     
         if(message=="start"):
             pre=current
-            if(vid==""):
-                vid=cv2.VideoCapture(0) 
+            if(vid == ""):
+                vid = cv2.VideoCapture(0)
             ret, frame = vid.read()
             obj = detect_persons_with_faces(frame, model, known_faces)
-            frame=obj["img"]
-            text_str=obj["text_str"]  
+            frame = obj["img"]
+            text_str = obj["text_str"]
             if(text_str != ""):
                 now = datetime.now()
                 log[now.time()] = text_str
@@ -84,13 +73,13 @@ async def websocket_endpoint(websocket: WebSocket):
             response_object = {"status": "success", "image": img_str}
              # Add frame details for every 20th frame
             if text_str != "":
-                response_object["frameNumber"]=text_str
+                response_object["frameNumber"] = text_str
 
             await socket.send_json(response_object)
-        elif(message=="stop"):
+        elif(message == "stop"):
             if(vid!=""):
                 vid.release()
-                vid="" 
+                vid = "" 
            
 
 

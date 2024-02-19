@@ -1,9 +1,9 @@
 import time
 from ultralytics import YOLO
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Cookie, Request, Response, WebSocket, WebSocketDisconnect, Body
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, WebSocket, Body
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pymongo import MongoClient
+# from pymongo import MongoClient
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
@@ -26,9 +26,9 @@ app.add_middleware(
 )
 # DB Connection
 
-mongo_uri = os.getenv("DB_URI")
-client = MongoClient(mongo_uri)
-users_collection = client.get_database().get_collection("users")
+# mongo_uri = os.getenv("DB_URI")
+# client = MongoClient(mongo_uri)
+# users_collection = client.get_database().get_collection("users")
 
 socket=""
 
@@ -95,6 +95,7 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/")
 async def test(video_name: Optional[str] = None):
     global socket
+    global log
     log={}
     video_path = f"videos/{video_name}"
     print(video_path)
@@ -122,13 +123,14 @@ async def test(video_name: Optional[str] = None):
             i+=1
             continue
         if not ret:
+            await socket.send_json({"message" : "all frames sent"})
             break  # Break out of the loop if there are no more frames
         obj = detect_persons_with_faces(frame, model, known_faces)
         frame=obj["img"]
         text_str=obj["text_str"]    
         if(text_str != ""):
             log[time_frame] = text_str
-            print(log)    
+            # print(log)    
         _, buffer = cv2.imencode('.jpg', frame)
         img_str = base64.b64encode(buffer).decode('utf-8')
         
@@ -147,38 +149,6 @@ async def test(video_name: Optional[str] = None):
 global is_streaming
 is_streaming = True
 
-# @app.get("/webcam")
-# async def stream_webcam():
-#     global socket
-#     cap = cv2.VideoCapture(0)  # Open webcam (assuming it's the default device)
-
-#     if not cap.isOpened():
-#         return {"error": "Unable to open webcam."}
-#     i = 0
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-
-#         _, buffer = cv2.imencode('.jpg', frame)
-#         img_str = base64.b64encode(buffer).decode('utf-8')
-
-#         # Construct response object
-#         response_object = {"status": "success", "image": img_str}
-
-#         # Add frame details for every 20th frame
-#         if i % 20 == 0:
-#             response_object["frameNumber"] = i
-        
-#         # msg = socket.receive_text()
-#         # print(msg)
-#         await socket.send_json(response_object)
-#         i += 1
-
-#     cap.release()  # Release the webcam capture after streaming frames
-
-#     return {"status": "success", "message": "Webcam frames sent"}
-
 @app.delete("/pause")
 async def pause_streaming():
     global pause_flag
@@ -188,12 +158,10 @@ async def pause_streaming():
 
 @app.get("/videos")
 async def get_videos_with_first_frames():
-
     videos_folder = "videos"
     video_files = [file for file in os.listdir(videos_folder) if file.endswith(".mp4")]
 
     videos_data = []
-    log={}
     for video_file in video_files:
         video_path = os.path.join(videos_folder, video_file)
         vid = cv2.VideoCapture(video_path)
@@ -267,7 +235,7 @@ async def upload_photo(name: str = Form(...), file: UploadFile = File(...)):
             base64_encoded = base64.b64encode(image_file.read())
 
         user_data = {"name": name, "photo": base64_encoded}
-        users_collection.insert_one(user_data)
+        # users_collection.insert_one(user_data)
         known_faces = load_known_faces(known_faces_directory)
         return JSONResponse(content={"message": "Photo uploaded successfully", "name": name, "file_path": str(file_path)})
     
@@ -298,8 +266,12 @@ async def gemini_response(prompt: str = Body(..., description="The context or ba
                           question: str = Body(..., description="The specific question you want answered."),
                           max_tokens: Optional[int] = None):
     model = genai.GenerativeModel("gemini-pro")
+    global log
+    print("Question:",question)
+    print(log)
     try:
-        response = model.generate_content(["You are a conversation chatbot, I am giving you the persons entering the camera frames at specific times by accessing the webcam. Answer the questions based on the below log information shortly: {}".format(log), question])
+        # response = model.generate_content(["You are a conversation chatbot, I am giving you the persons entering the camera frames at specific times by accessing the webcam. Answer the questions based on the below log information shortly: {}".format(log), question])
+        response = model.generate_content(["You are a conversational chatbot trained to answer the questions on a particular video, Your task is to generate a friendly response based on the below video information : {}. Don't answer any irrelevent questions".format(log), question])
         print(response.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"API error: {e}")

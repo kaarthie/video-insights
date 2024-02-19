@@ -57,14 +57,14 @@ def load_known_faces(directory):
 def detect_persons_with_faces(img, model, known_faces, confidence_threshold=0.8):
     results = model(img, stream=True)
     text_str=""
-    for r in results:
+    objects={}
+    for r in results:  
         boxes = r.boxes
-
         for box in boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             confidence = math.ceil((box.conf[0] * 100)) / 100
             cls = int(box.cls[0])
-
+            # print(classNames[cls],'result check')
             if confidence > confidence_threshold and classNames[cls] == "person":
                 frame = img[y1:y2, x1:x2]
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -87,6 +87,15 @@ def detect_persons_with_faces(img, model, known_faces, confidence_threshold=0.8)
                             text_str+="{} is wearing {} color dress.".format(name,color_name)  
                         except:
                             text_str+="{} is found.".format(name)
+            elif(classNames[cls]!="person"):  
+                val=classNames[cls]
+                if(val in objects):  
+                    objects[val]+=1
+                else:
+                    objects[val]=1
+                # text_str+="There is a {}".format(classNames[cls])
+    if(len(objects)!=0):
+        text_str+="The founded objects are {}".format(objects)
     return {"img":img,"text_str" : text_str}
 
 def main():
@@ -94,7 +103,7 @@ def main():
     cap.set(3, 640)
     cap.set(4, 480)
 
-    known_faces_directory = "images"
+    known_faces_directory = "photos"
     known_faces = load_known_faces(known_faces_directory)
 
     model = YOLO("yolov8n.pt")
@@ -107,7 +116,7 @@ def main():
 
         img_with_faces = detect_persons_with_faces(img, model, known_faces)
 
-        cv2.imshow('Webcam', img_with_faces)
+        cv2.imshow('Webcam', img_with_faces["img"])
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
